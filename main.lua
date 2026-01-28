@@ -1,4 +1,3 @@
-
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -10,18 +9,18 @@ local Camera = Workspace.CurrentCamera
 
 -- Performance Optimization
 local RENDER_DISTANCE = 1000
-local UPDATE_INTERVAL = 0.016 -- 60 FPS
+local UPDATE_INTERVAL = 0.016
 local lastUpdate = 0
 
 -- Ana Ayarlar
 local Settings = {
     -- Lock Settings
     camlockEnabled = false,
-    aimbotEnabled = false,
+    silentAimEnabled = false,
+    lockButtonEnabled = false,
     
     -- Smoothness
     camlockSmoothness = 0.25,
-    aimbotSmoothness = 0.18,
     
     -- Prediction
     horizontalPrediction = 0.145,
@@ -136,7 +135,7 @@ local versionLabel = Instance.new("TextLabel")
 versionLabel.Size = UDim2.new(0, 60, 0, 20)
 versionLabel.Position = UDim2.new(1, -70, 0.5, -10)
 versionLabel.BackgroundColor3 = Color3.fromRGB(88, 101, 242)
-versionLabel.Text = "v3.0"
+versionLabel.Text = "v3.5"
 versionLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
 versionLabel.Font = Enum.Font.GothamBold
 versionLabel.TextSize = 11
@@ -217,7 +216,6 @@ local function createButton(text, callback, color, parent)
         callback(button, label, status, statusText)
     end)
     
-    -- Touch support
     button.MouseEnter:Connect(function()
         TweenService:Create(button, TweenInfo.new(0.2), {BackgroundColor3 = Color3.fromRGB(30, 30, 38)}):Play()
     end)
@@ -306,6 +304,86 @@ accuracyLabel.Font = Enum.Font.GothamMedium
 accuracyLabel.TextSize = 12
 accuracyLabel.Parent = infoPanel
 
+-- Toggle Lock Button (Floating)
+local lockButton = Instance.new("TextButton")
+lockButton.Size = UDim2.new(0, 70, 0, 70)
+lockButton.Position = UDim2.new(0.5, -35, 0.8, -35)
+lockButton.BackgroundColor3 = Color3.fromRGB(25, 25, 30)
+lockButton.BorderSizePixel = 0
+lockButton.Text = ""
+lockButton.Active = true
+lockButton.Draggable = true
+lockButton.Visible = false
+lockButton.Parent = screenGui
+
+local lockButtonCorner = Instance.new("UICorner")
+lockButtonCorner.CornerRadius = UDim.new(0, 12)
+lockButtonCorner.Parent = lockButton
+
+local lockButtonShadow = Instance.new("ImageLabel")
+lockButtonShadow.Size = UDim2.new(1, 30, 1, 30)
+lockButtonShadow.Position = UDim2.new(0, -15, 0, -15)
+lockButtonShadow.BackgroundTransparency = 1
+lockButtonShadow.Image = "rbxasset://textures/ui/GuiImagePlaceholder.png"
+lockButtonShadow.ImageColor3 = Color3.fromRGB(0, 0, 0)
+lockButtonShadow.ImageTransparency = 0.4
+lockButtonShadow.ScaleType = Enum.ScaleType.Slice
+lockButtonShadow.SliceCenter = Rect.new(10, 10, 118, 118)
+lockButtonShadow.ZIndex = 0
+lockButtonShadow.Parent = lockButton
+
+local lockIcon = Instance.new("TextLabel")
+lockIcon.Size = UDim2.new(1, 0, 0.6, 0)
+lockIcon.Position = UDim2.new(0, 0, 0, 5)
+lockIcon.BackgroundTransparency = 1
+lockIcon.Text = "L"
+lockIcon.TextColor3 = Color3.fromRGB(180, 180, 190)
+lockIcon.Font = Enum.Font.GothamBold
+lockIcon.TextSize = 32
+lockIcon.Parent = lockButton
+
+local lockStatus = Instance.new("TextLabel")
+lockStatus.Size = UDim2.new(1, 0, 0.3, 0)
+lockStatus.Position = UDim2.new(0, 0, 0.65, 0)
+lockStatus.BackgroundTransparency = 1
+lockStatus.Text = "LOCK"
+lockStatus.TextColor3 = Color3.fromRGB(150, 150, 160)
+lockStatus.Font = Enum.Font.GothamBold
+lockStatus.TextSize = 11
+lockStatus.Parent = lockButton
+
+-- Lock Button Logic
+local isLocked = false
+lockButton.MouseButton1Click:Connect(function()
+    isLocked = not isLocked
+    
+    local targetColor = isLocked and Color3.fromRGB(50, 120, 50) or Color3.fromRGB(25, 25, 30)
+    local iconColor = isLocked and Color3.fromRGB(100, 255, 150) or Color3.fromRGB(180, 180, 190)
+    
+    TweenService:Create(lockButton, TweenInfo.new(0.3, Enum.EasingStyle.Back), {
+        BackgroundColor3 = targetColor,
+        Size = UDim2.new(0, 75, 0, 75)
+    }):Play()
+    
+    TweenService:Create(lockIcon, TweenInfo.new(0.2), {
+        TextColor3 = iconColor
+    }):Play()
+    
+    task.wait(0.1)
+    TweenService:Create(lockButton, TweenInfo.new(0.2, Enum.EasingStyle.Back), {
+        Size = UDim2.new(0, 70, 0, 70)
+    }):Play()
+    
+    lockStatus.Text = isLocked and "LOCKED" or "LOCK"
+    lockStatus.TextColor3 = iconColor
+    
+    if isLocked then
+        sendNotification("LOCK ACTIVATED", "Target locked via button", Color3.fromRGB(100, 255, 150))
+    else
+        sendNotification("LOCK DEACTIVATED", "Lock released", Color3.fromRGB(255, 100, 100))
+    end
+end)
+
 -- Main Controls Section
 createSection("MAIN CONTROLS")
 
@@ -325,18 +403,37 @@ local camlockBtn = createButton("Camlock", function(btn, label, status, statusTe
     end
 end)
 
-local aimbotBtn = createButton("Silent Aim", function(btn, label, status, statusText)
-    Settings.aimbotEnabled = not Settings.aimbotEnabled
-    statusText.Text = Settings.aimbotEnabled and "ON" or "OFF"
-    statusText.TextColor3 = Settings.aimbotEnabled and Color3.fromRGB(255, 150, 255) or Color3.fromRGB(180, 180, 190)
+local silentAimBtn = createButton("Silent Aim", function(btn, label, status, statusText)
+    Settings.silentAimEnabled = not Settings.silentAimEnabled
+    statusText.Text = Settings.silentAimEnabled and "ON" or "OFF"
+    statusText.TextColor3 = Settings.silentAimEnabled and Color3.fromRGB(255, 150, 255) or Color3.fromRGB(180, 180, 190)
     TweenService:Create(status, TweenInfo.new(0.2), {
-        BackgroundColor3 = Settings.aimbotEnabled and Color3.fromRGB(80, 40, 80) or Color3.fromRGB(35, 35, 40)
+        BackgroundColor3 = Settings.silentAimEnabled and Color3.fromRGB(80, 40, 80) or Color3.fromRGB(35, 35, 40)
     }):Play()
     
-    if Settings.aimbotEnabled then
-        sendNotification("SILENT AIM ENABLED", "100% accuracy mode active", Color3.fromRGB(255, 150, 255))
+    if Settings.silentAimEnabled then
+        sendNotification("SILENT AIM ENABLED", "Bullets redirect to target anywhere", Color3.fromRGB(255, 150, 255))
     else
         sendNotification("SILENT AIM DISABLED", "System deactivated", Color3.fromRGB(255, 100, 100))
+    end
+end)
+
+local lockButtonToggleBtn = createButton("Toggle Lock Button", function(btn, label, status, statusText)
+    Settings.lockButtonEnabled = not Settings.lockButtonEnabled
+    statusText.Text = Settings.lockButtonEnabled and "ON" or "OFF"
+    statusText.TextColor3 = Settings.lockButtonEnabled and Color3.fromRGB(100, 200, 255) or Color3.fromRGB(180, 180, 190)
+    TweenService:Create(status, TweenInfo.new(0.2), {
+        BackgroundColor3 = Settings.lockButtonEnabled and Color3.fromRGB(40, 60, 80) or Color3.fromRGB(35, 35, 40)
+    }):Play()
+    
+    lockButton.Visible = Settings.lockButtonEnabled
+    
+    if Settings.lockButtonEnabled then
+        sendNotification("LOCK BUTTON ENABLED", "Drag and tap to lock target", Color3.fromRGB(100, 200, 255))
+    else
+        isLocked = false
+        lockStatus.Text = "LOCK"
+        sendNotification("LOCK BUTTON DISABLED", "Button hidden", Color3.fromRGB(255, 100, 100))
     end
 end)
 
@@ -526,7 +623,7 @@ targetLine.Transparency = 0.7
 
 -- Update FOV Circle
 RunService.Heartbeat:Connect(function()
-    if Settings.showFOV and (Settings.camlockEnabled or Settings.aimbotEnabled) then
+    if Settings.showFOV and (Settings.camlockEnabled or Settings.silentAimEnabled or isLocked) then
         local viewportSize = Camera.ViewportSize
         fovCircle.Position = Vector2.new(viewportSize.X / 2, viewportSize.Y / 2)
         fovCircle.Radius = Settings.fovRadius
@@ -667,7 +764,9 @@ RunService.Heartbeat:Connect(function(deltaTime)
     if currentTime - lastUpdate < UPDATE_INTERVAL then return end
     lastUpdate = currentTime
     
-    if not (Settings.camlockEnabled or Settings.aimbotEnabled) then
+    local shouldLock = Settings.camlockEnabled or isLocked
+    
+    if not shouldLock then
         targetLine.Visible = false
         targetNameLabel.Text = "Target: None"
         healthLabel.Text = "Health: -"
@@ -704,7 +803,7 @@ RunService.Heartbeat:Connect(function(deltaTime)
                 
                 -- Shake for camlock only
                 local shakeOffset = Vector3.zero
-                if Settings.camlockEnabled then
+                if Settings.camlockEnabled or isLocked then
                     shakeOffset = Vector3.new(
                         (math.random() - 0.5) * Settings.shakeIntensity,
                         (math.random() - 0.5) * Settings.shakeIntensity,
@@ -713,7 +812,7 @@ RunService.Heartbeat:Connect(function(deltaTime)
                 end
 
                 -- Apply lock
-                if Settings.camlockEnabled then
+                if Settings.camlockEnabled or isLocked then
                     local targetCFrame = CFrame.new(Camera.CFrame.Position, predictedPosition + shakeOffset)
                     Camera.CFrame = Camera.CFrame:Lerp(targetCFrame, Settings.camlockSmoothness)
                 end
@@ -725,7 +824,7 @@ RunService.Heartbeat:Connect(function(deltaTime)
                     targetLine.From = Vector2.new(viewportSize.X / 2, viewportSize.Y / 2)
                     targetLine.To = Vector2.new(screenPos.X, screenPos.Y)
                     targetLine.Visible = true
-                    targetLine.Color = Settings.aimbotEnabled and Color3.fromRGB(255, 100, 255) or Color3.fromRGB(88, 101, 242)
+                    targetLine.Color = Settings.silentAimEnabled and Color3.fromRGB(255, 100, 255) or Color3.fromRGB(88, 101, 242)
                 else
                     targetLine.Visible = false
                 end
@@ -763,7 +862,6 @@ RunService.Heartbeat:Connect(function(deltaTime)
     end
 end)
 
--- Silent Aim Hook
 local mt = getrawmetatable(game)
 local old_namecall = mt.__namecall
 setreadonly(mt, false)
@@ -772,7 +870,7 @@ mt.__namecall = newcclosure(function(...)
     local args = {...}
     local method = getnamecallmethod()
     
-    if Settings.aimbotEnabled and method == "FireServer" then
+    if Settings.silentAimEnabled and (method == "FireServer" or method == "InvokeServer") then
         local part = getValidTarget()
         if part and part.Parent then
             local hrp = part.Parent:FindFirstChild("HumanoidRootPart")
@@ -783,11 +881,21 @@ mt.__namecall = newcclosure(function(...)
                 if myChar and myChar:FindFirstChild("HumanoidRootPart") then
                     local distance = (myChar.HumanoidRootPart.Position - part.Position).Magnitude
                     local predictionOffset = calculatePrediction(velocity, distance)
+                    local targetPosition = part.Position + predictionOffset
                     
-                    -- Find and replace target argument
+                    -- Replace any Vector3 argument with target position
                     for i, v in ipairs(args) do
                         if typeof(v) == "Vector3" then
-                            args[i] = part.Position + predictionOffset
+                            args[i] = targetPosition
+                            TargetData.hitCount = TargetData.hitCount + 1
+                            break
+                        elseif typeof(v) == "CFrame" then
+                            args[i] = CFrame.new(targetPosition)
+                            TargetData.hitCount = TargetData.hitCount + 1
+                            break
+                        elseif typeof(v) == "Instance" and v:IsA("BasePart") then
+                            -- Some games pass the part itself
+                            args[i] = part
                             TargetData.hitCount = TargetData.hitCount + 1
                             break
                         end
@@ -803,36 +911,6 @@ mt.__namecall = newcclosure(function(...)
 end)
 
 setreadonly(mt, true)
-
--- Gun Hook (Fallback)
-pcall(function()
-    local gunModule = require(ReplicatedStorage.Modules.Weapons.GunClient)
-    if gunModule and gunModule.Fire then
-        local old_fire = gunModule.Fire
-        gunModule.Fire = function(self, tool, origin, target, config, bullet_num, mouse)
-            if Settings.aimbotEnabled then
-                local part = getValidTarget()
-                if part and part.Parent then
-                    local hrp = part.Parent:FindFirstChild("HumanoidRootPart")
-                    if hrp then
-                        local velocity = hrp.AssemblyLinearVelocity or hrp.Velocity
-                        local myChar = LocalPlayer.Character
-                        
-                        if myChar and myChar:FindFirstChild("HumanoidRootPart") then
-                            local distance = (myChar.HumanoidRootPart.Position - part.Position).Magnitude
-                            local predictionOffset = calculatePrediction(velocity, distance)
-                            target = part.Position + predictionOffset
-                            TargetData.hitCount = TargetData.hitCount + 1
-                        end
-                    end
-                else
-                    TargetData.missCount = TargetData.missCount + 1
-                end
-            end
-            return old_fire(self, tool, origin, target, config, bullet_num, mouse)
-        end
-    end
-end)
 
 -- Character Reset Handler
 LocalPlayer.CharacterAdded:Connect(function()
@@ -874,4 +952,4 @@ end)
 
 -- Startup
 task.wait(0.5)
-sendNotification("SYSTEM LOADED", "Advanced Lock v3.0 - Mobile Optimized", Color3.fromRGB(100, 255, 100))
+sendNotification("SYSTEM LOADED", "Advanced Lock v3.5 - Tap lock button when enabled", Color3.fromRGB(100, 255, 100))
