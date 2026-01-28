@@ -1,275 +1,192 @@
--- Win7 Mobile Camlock - Animasyonlu & Stabil Edition (CoreGui - Respawn Safe)
--- Buton tıkla = Lock | Buton sürükle = Hareket ettir
+-- Nyxal - Modern Mobile Camlock (Ping Prediction + Stabil Lock)
+-- Toggle Button → Ana GUI aç/kapat | Lock Button → Lock ON/OFF
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
 local TweenService = game:GetService("TweenService")
+local Stats = game:GetService("Stats")
 local LocalPlayer = Players.LocalPlayer
 local Camera = workspace.CurrentCamera
 
--- CoreGui (ölünce kaybolmaz)
+-- CoreGui
 local ScreenGui = Instance.new("ScreenGui")
-ScreenGui.Name = "Win7CamlockAnim"
+ScreenGui.Name = "Nyxal"
 ScreenGui.Parent = game:GetService("CoreGui")
 ScreenGui.ResetOnSpawn = false
 ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 
--- Animasyon Tween Info'ları (bozulmasın diye reusable)
-local tweenFast = TweenInfo.new(0.15, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
-local tweenSlow = TweenInfo.new(0.25, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+-- Settings
+local Settings = {
+    Enabled = false,
+    TeamCheck = true,
+    VisibleCheck = true,
+    Smoothness = 0.11,
+    PredictionMultiplier = 1.25, -- Ping'e göre çarpan
+    TargetInfo = true
+}
 
--- Ana Win7 Pencere (Açılış animasyonu ile)
-local MainFrame = Instance.new("Frame")
-MainFrame.Size = UDim2.new(0, 360, 0, 460)
-MainFrame.Position = UDim2.new(0.5, -180, 0.5, -230)
-MainFrame.BackgroundColor3 = Color3.fromRGB(236, 233, 216)
-MainFrame.BorderSizePixel = 2
-MainFrame.BorderColor3 = Color3.fromRGB(128, 128, 128)
-MainFrame.Active = true
-MainFrame.Draggable = true
-MainFrame.BackgroundTransparency = 1 -- Açılışta transparan başlıyor
-MainFrame.Parent = ScreenGui
+-- Modern Siyah Transparent Ana GUI
+local MainGui = Instance.new("Frame")
+MainGui.Size = UDim2.new(0, 300, 0, 350)
+MainGui.Position = UDim2.new(0.5, -150, 0.5, -175)
+MainGui.BackgroundColor3 = Color3.fromRGB(10, 10, 10)
+MainGui.BackgroundTransparency = 0.4
+MainGui.BorderSizePixel = 0
+MainGui.Active = true
+MainGui.Draggable = true
+MainGui.Visible = false
+MainGui.Parent = ScreenGui
 
--- Açılış animasyonu (fade + scale)
-TweenService:Create(MainFrame, tweenSlow, {BackgroundTransparency = 0}):Play()
-TweenService:Create(MainFrame, tweenSlow, {Size = UDim2.new(0, 360, 0, 460)}):Play()
+local UICorner = Instance.new("UICorner")
+UICorner.CornerRadius = UDim.new(0, 18)
+UICorner.Parent = MainGui
 
--- Win7 Mavi Başlık
-local TitleBar = Instance.new("Frame")
-TitleBar.Size = UDim2.new(1, 0, 0, 32)
-TitleBar.BackgroundColor3 = Color3.fromRGB(0, 120, 215)
-TitleBar.BorderSizePixel = 0
-TitleBar.Parent = MainFrame
+local UIGrad = Instance.new("UIGradient")
+UIGrad.Color = ColorSequence.new{
+    ColorSequenceKeypoint.new(0, Color3.fromRGB(30, 30, 30)),
+    ColorSequenceKeypoint.new(1, Color3.fromRGB(5, 5, 5))
+}
+UIGrad.Rotation = 90
+UIGrad.Parent = MainGui
 
+-- Başlık
 local Title = Instance.new("TextLabel")
-Title.Size = UDim2.new(1, -80, 1, 0)
-Title.Position = UDim2.new(0, 10, 0, 0)
+Title.Size = UDim2.new(1, 0, 0, 45)
 Title.BackgroundTransparency = 1
-Title.Text = "Win7 Camlock"
-Title.TextColor3 = Color3.new(1,1,1)
-Title.Font = Enum.Font.SourceSansBold
-Title.TextSize = 16
-Title.TextXAlignment = Enum.TextXAlignment.Left
-Title.Parent = TitleBar
+Title.Text = "Nyxal"
+Title.TextColor3 = Color3.fromRGB(0, 255, 180)
+Title.Font = Enum.Font.GothamBlack
+Title.TextSize = 24
+Title.Parent = MainGui
 
+-- Close Button
 local Close = Instance.new("TextButton")
-Close.Size = UDim2.new(0, 45, 0, 28)
-Close.Position = UDim2.new(1, -50, 0, 2)
-Close.BackgroundColor3 = Color3.fromRGB(231, 76, 60)
-Close.Text = "X"
+Close.Size = UDim2.new(0, 40, 0, 40)
+Close.Position = UDim2.new(1, -50, 0, 5)
+Close.BackgroundColor3 = Color3.fromRGB(255, 70, 70)
+Close.Text = "×"
 Close.TextColor3 = Color3.new(1,1,1)
-Close.Font = Enum.Font.SourceSansBold
-Close.TextSize = 16
-Close.Parent = TitleBar
-Close.MouseButton1Click:Connect(function() 
-    TweenService:Create(MainFrame, tweenSlow, {BackgroundTransparency = 1, Size = UDim2.new(0, 0, 0, 0)}):Play()
-    task.delay(0.3, function() ScreenGui:Destroy() end)
+Close.Font = Enum.Font.GothamBold
+Close.TextSize = 26
+Close.Parent = MainGui
+
+local CloseCorner = Instance.new("UICorner")
+CloseCorner.CornerRadius = UDim.new(0, 10)
+CloseCorner.Parent = Close
+
+Close.MouseButton1Click:Connect(function()
+    TweenService:Create(MainGui, TweenInfo.new(0.3, Enum.EasingStyle.Back), {BackgroundTransparency = 1, Size = UDim2.new(0, 0, 0, 0)}):Play()
+    task.delay(0.35, function() MainGui.Visible = false end)
 end)
 
--- Hover efekti (tüm butonlar için)
-local function addHover(btn, defaultColor)
-    btn:SetAttribute("DefaultColor", defaultColor)
-    btn.MouseEnter:Connect(function()
-        TweenService:Create(btn, tweenFast, {BackgroundColor3 = Color3.fromRGB(100, 180, 255)}):Play()
-        TweenService:Create(btn, tweenFast, {Size = btn.Size + UDim2.new(0, 4, 0, 4)}):Play()
-    end)
-    btn.MouseLeave:Connect(function()
-        TweenService:Create(btn, tweenFast, {BackgroundColor3 = defaultColor}):Play()
-        TweenService:Create(btn, tweenFast, {Size = btn.Size}):Play()
-    end)
-end
-
-addHover(Close, Color3.fromRGB(231, 76, 60))
-
--- İçerik ScrollFrame
-local Scroll = Instance.new("ScrollingFrame")
-Scroll.Size = UDim2.new(1, -20, 1, -50)
-Scroll.Position = UDim2.new(0, 10, 0, 40)
-Scroll.BackgroundTransparency = 1
-Scroll.ScrollBarThickness = 6
-Scroll.ScrollBarImageColor3 = Color3.fromRGB(0, 120, 215)
-Scroll.Parent = MainFrame
-
-local Layout = Instance.new("UIListLayout")
-Layout.Padding = UDim.new(0, 12)
-Layout.SortOrder = Enum.SortOrder.LayoutOrder
-Layout.Parent = Scroll
-
--- Kare Lock Butonu (Win7 Style - Ana GUI içinde)
+-- Lock Button (Ana GUI içinde değil, ayrı sürüklenir buton)
 local LockBtn = Instance.new("ImageButton")
-LockBtn.Size = UDim2.new(0, 120, 0, 120)
-LockBtn.Position = UDim2.new(0.5, -60, 0, 10)
-LockBtn.BackgroundColor3 = Color3.fromRGB(0, 120, 215)
-LockBtn.BorderSizePixel = 2
-LockBtn.BorderColor3 = Color3.fromRGB(128, 128, 128)
-LockBtn.Image = "rbxassetid://0" -- ← BURAYA WIN7 İKON ID'Nİ YAZ (sen koyacaksın)
-LockBtn.Parent = Scroll
-LockBtn.LayoutOrder = 1
+LockBtn.Size = UDim2.new(0, 100, 0, 100)
+LockBtn.Position = UDim2.new(0.5, -50, 0.6, -50)
+LockBtn.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
+LockBtn.BackgroundTransparency = 0.35
+LockBtn.BorderSizePixel = 0
+LockBtn.Image = "rbxassetid://0" -- ← BURAYA İKON ID'Nİ YAZ (sen koyacaksın)
+LockBtn.Parent = ScreenGui
 
 local LockCorner = Instance.new("UICorner")
-LockCorner.CornerRadius = UDim.new(0, 20)
+LockCorner.CornerRadius = UDim.new(0, 22)
 LockCorner.Parent = LockBtn
 
-local LockLabel = Instance.new("TextLabel")
-LockLabel.Size = UDim2.new(1, 0, 0.3, 0)
-LockLabel.Position = UDim2.new(0, 0, 0.7, 0)
-LockLabel.BackgroundTransparency = 1
-LockLabel.Text = "LOCK"
-LockLabel.TextColor3 = Color3.new(1,1,1)
-LockLabel.Font = Enum.Font.SourceSansBold
-LockLabel.TextSize = 24
-LockLabel.Parent = LockBtn
+local LockStroke = Instance.new("UIStroke")
+LockStroke.Color = Color3.fromRGB(0, 255, 180)
+LockStroke.Thickness = 2.5
+LockStroke.Transparency = 0.5
+LockStroke.Parent = LockBtn
 
--- Hover + Tıkla Animasyonu (Win7 bounce + scale)
-addHover(LockBtn, Color3.fromRGB(0, 120, 215))
+-- Lock Hover + Click Animasyon
+LockBtn.MouseEnter:Connect(function()
+    TweenService:Create(LockBtn, TweenInfo.new(0.2), {BackgroundTransparency = 0.15, Size = UDim2.new(0, 110, 0, 110)}):Play()
+end)
+LockBtn.MouseLeave:Connect(function()
+    TweenService:Create(LockBtn, TweenInfo.new(0.2), {BackgroundTransparency = 0.35, Size = UDim2.new(0, 100, 0, 100)}):Play()
+end)
+
 LockBtn.MouseButton1Click:Connect(function()
     Settings.Enabled = not Settings.Enabled
-    TweenService:Create(LockBtn, TweenInfo.new(0.2, Enum.EasingStyle.Bounce), {
-        Size = UDim2.new(0, Settings.Enabled and 130 or 120, 0, Settings.Enabled and 130 or 120),
-        BackgroundColor3 = Settings.Enabled and Color3.fromRGB(0, 200, 0) or Color3.fromRGB(0, 120, 215)
+    TweenService:Create(LockBtn, TweenInfo.new(0.25, Enum.EasingStyle.Back), {
+        BackgroundColor3 = Settings.Enabled and Color3.fromRGB(0, 200, 100) or Color3.fromRGB(20, 20, 20),
+        Size = UDim2.new(0, Settings.Enabled and 120 or 100, 0, Settings.Enabled and 120 or 100)
     }):Play()
-    LockLabel.Text = Settings.Enabled and "LOCKED" or "LOCK"
 end)
 
--- Ayarlar (FOV, Smoothness)
-local FOVTitle = Instance.new("TextLabel")
-FOVTitle.Size = UDim2.new(1, -20, 0, 30)
-FOVTitle.BackgroundTransparency = 1
-FOVTitle.Text = "FOV: 120"
-FOVTitle.TextColor3 = Color3.new(0,0,0)
-FOVTitle.Font = Enum.Font.SourceSansBold
-FOVTitle.TextSize = 16
-FOVTitle.Parent = Scroll
-FOVTitle.LayoutOrder = 2
-
-local FOVInput = Instance.new("TextBox")
-FOVInput.Size = UDim2.new(1, -20, 0, 40)
-FOVInput.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-FOVInput.Text = "120"
-FOVInput.Font = Enum.Font.SourceSans
-FOVInput.TextSize = 18
-FOVInput.Parent = Scroll
-FOVInput.LayoutOrder = 3
-
-FOVInput.FocusLost:Connect(function()
-    local val = tonumber(FOVInput.Text)
-    if val and val >= 50 and val <= 500 then
-        Settings.FOV = val
-        FOVTitle.Text = "FOV: " .. val
-    else
-        FOVInput.Text = tostring(Settings.FOV)
+-- Lock Button Drag
+local dragging, dragInput, dragStart, startPos
+LockBtn.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+        dragging = true
+        dragStart = input.Position
+        startPos = LockBtn.Position
     end
 end)
 
--- Smoothness
-local SmoothTitle = Instance.new("TextLabel")
-SmoothTitle.Size = UDim2.new(1, -20, 0, 30)
-SmoothTitle.BackgroundTransparency = 1
-SmoothTitle.Text = "Smoothness: 0.12"
-SmoothTitle.TextColor3 = Color3.new(0,0,0)
-SmoothTitle.Font = Enum.Font.SourceSansBold
-SmoothTitle.TextSize = 16
-SmoothTitle.Parent = Scroll
-SmoothTitle.LayoutOrder = 4
-
-local SmoothInput = Instance.new("TextBox")
-SmoothInput.Size = UDim2.new(1, -20, 0, 40)
-SmoothInput.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-SmoothInput.Text = "0.12"
-SmoothInput.Font = Enum.Font.SourceSans
-SmoothInput.TextSize = 18
-SmoothInput.Parent = Scroll
-SmoothInput.LayoutOrder = 5
-
-SmoothInput.FocusLost:Connect(function()
-    local val = tonumber(SmoothInput.Text)
-    if val and val >= 0.01 and val <= 1 then
-        Settings.Smoothness = val
-        SmoothTitle.Text = "Smoothness: " .. val
-    else
-        SmoothInput.Text = tostring(Settings.Smoothness)
+LockBtn.InputChanged:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
+        dragInput = input
     end
 end)
 
--- Team Check Toggle
-local TeamToggle = Instance.new("TextButton")
-TeamToggle.Size = UDim2.new(1, -20, 0, 50)
-TeamToggle.BackgroundColor3 = Color3.fromRGB(46, 204, 113)
-TeamToggle.Text = "Team Check: ON"
-TeamToggle.TextColor3 = Color3.new(1,1,1)
-TeamToggle.Font = Enum.Font.SourceSansBold
-TeamToggle.TextSize = 16
-TeamToggle.Parent = Scroll
-TeamToggle.LayoutOrder = 6
-
-TeamToggle.MouseButton1Click:Connect(function()
-    Settings.TeamCheck = not Settings.TeamCheck
-    TeamToggle.Text = "Team Check: " .. (Settings.TeamCheck and "ON" or "OFF")
-    TeamToggle.BackgroundColor3 = Settings.TeamCheck and Color3.fromRGB(46, 204, 113) or Color3.fromRGB(231, 76, 60)
+UserInputService.InputChanged:Connect(function(input)
+    if input == dragInput and dragging then
+        local delta = input.Position - dragStart
+        LockBtn.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+    end
 end)
-addWin7Hover(TeamToggle, Color3.fromRGB(46, 204, 113))
 
--- Target Info Panel (sağ üstte, animasyonlu)
-local TargetPanel = Instance.new("Frame")
-TargetPanel.Size = UDim2.new(0, 260, 0, 100)
-TargetPanel.Position = UDim2.new(1, -280, 0, 20)
-TargetPanel.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
-TargetPanel.BorderSizePixel = 2
-TargetPanel.BorderColor3 = Color3.fromRGB(0, 120, 215)
-TargetPanel.Visible = false
-TargetPanel.BackgroundTransparency = 1 -- Açılışta transparan
-TargetPanel.Parent = ScreenGui
+UserInputService.InputEnded:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+        dragging = false
+    end
+end)
 
-local PanelCorner = Instance.new("UICorner")
-PanelCorner.CornerRadius = UDim.new(0, 12)
-PanelCorner.Parent = TargetPanel
+-- Toggle Button (Ana GUI'yi gizle/göster)
+local ToggleGuiBtn = Instance.new("TextButton")
+ToggleGuiBtn.Size = UDim2.new(0, 70, 0, 70)
+ToggleGuiBtn.Position = UDim2.new(0.05, 0, 0.9, -80)
+ToggleGuiBtn.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
+ToggleGuiBtn.BackgroundTransparency = 0.5
+ToggleGuiBtn.BorderSizePixel = 0
+ToggleGuiBtn.Text = "GUI"
+ToggleGuiBtn.TextColor3 = Color3.fromRGB(0, 255, 180)
+ToggleGuiBtn.Font = Enum.Font.GothamBold
+ToggleGuiBtn.TextSize = 18
+ToggleGuiBtn.Parent = ScreenGui
 
-local TargetName = Instance.new("TextLabel")
-TargetName.Size = UDim2.new(1, -10, 0.5, 0)
-TargetName.Position = UDim2.new(0, 5, 0, 5)
-TargetName.BackgroundTransparency = 1
-TargetName.Text = "No Target"
-TargetName.TextColor3 = Color3.new(1,1,1)
-TargetName.Font = Enum.Font.SourceSansBold
-TargetName.TextSize = 20
-TargetName.Parent = TargetPanel
+local ToggleGuiCorner = Instance.new("UICorner")
+ToggleGuiCorner.CornerRadius = UDim.new(0, 18)
+ToggleGuiCorner.Parent = ToggleGuiBtn
 
-local TargetDist = Instance.new("TextLabel")
-TargetDist.Size = UDim2.new(1, -10, 0.5, 0)
-TargetDist.Position = UDim2.new(0, 5, 0.5, 0)
-TargetDist.BackgroundTransparency = 1
-TargetDist.Text = "Distance: --"
-TargetDist.TextColor3 = Color3.fromRGB(200, 200, 200)
-TargetDist.Font = Enum.Font.SourceSans
-TargetDist.TextSize = 16
-TargetDist.Parent = TargetPanel
+ToggleGuiBtn.MouseButton1Click:Connect(function()
+    if MainGui.Visible then
+        TweenService:Create(MainGui, TweenInfo.new(0.3), {BackgroundTransparency = 1, Size = UDim2.new(0, 0, 0, 0)}):Play()
+        task.delay(0.35, function() MainGui.Visible = false end)
+    else
+        MainGui.Visible = true
+        TweenService:Create(MainGui, TweenInfo.new(0.3, Enum.EasingStyle.Back), {BackgroundTransparency = 0.35, Size = UDim2.new(0, 300, 0, 350)}):Play()
+    end
+end)
 
--- FOV Circle (animasyonlu)
-local FOVCircle = Instance.new("Frame")
-FOVCircle.Size = UDim2.new(0, Settings.FOV * 2, 0, Settings.FOV * 2)
-FOVCircle.Position = UDim2.new(0.5, -Settings.FOV, 0.5, -Settings.FOV)
-FOVCircle.BackgroundTransparency = 1
-FOVCircle.Parent = ScreenGui
-
-local CircleCorner = Instance.new("UICorner")
-CircleCorner.CornerRadius = UDim.new(1, 0)
-CircleCorner.Parent = FOVCircle
-
-local CircleStroke = Instance.new("UIStroke")
-CircleStroke.Color = Color3.fromRGB(0, 120, 215)
-CircleStroke.Thickness = 4
-CircleStroke.Transparency = 0.3
-CircleStroke.Parent = FOVCircle
-
--- En Yakın Oyuncu Bulma
+-- En Yakın Oyuncu + Ping Prediction
 local function GetClosestTarget()
-    local closest, minDist = nil, Settings.FOV
+    local closest, minDist = nil, 180 -- max lock mesafesi
 
     for _, plr in pairs(Players:GetPlayers()) do
         if plr ~= LocalPlayer and plr.Character and plr.Character:FindFirstChild("HumanoidRootPart") and plr.Character:FindFirstChild("Head") then
             local head = plr.Character.Head
-            local screenPos, onScreen = Camera:WorldToScreenPoint(head.Position)
+            local root = plr.Character.HumanoidRootPart
+            
+            -- Ping bazlı prediction (en iyi değer 1.25-1.4 arası)
+            local ping = Stats.Network.ServerStatsItem["Data Ping"]:GetValue() / 1000
+            local predOffset = root.Velocity * ping * Settings.PredictionMultiplier
+            local predPos = head.Position + predOffset
+
+            local screenPos, onScreen = Camera:WorldToScreenPoint(predPos)
             local dist = (Vector2.new(screenPos.X, screenPos.Y) - Vector2.new(Camera.ViewportSize.X/2, Camera.ViewportSize.Y/2)).Magnitude
 
             if onScreen and dist < minDist then
@@ -283,12 +200,11 @@ local function GetClosestTarget()
     return closest
 end
 
--- Ana Loop (Stabil & Animasyonlu)
+-- Ana Lock Loop
 local CurrentTarget = nil
 RunService.RenderStepped:Connect(function()
     if not Settings.Enabled then 
         CurrentTarget = nil
-        TargetPanel.Visible = false
         return 
     end
 
@@ -296,30 +212,16 @@ RunService.RenderStepped:Connect(function()
     CurrentTarget = target
 
     if target and target.Character and target.Character:FindFirstChild("Head") then
-        -- Smooth Camlock
         local headPos = target.Character.Head.Position
+        local rootVel = target.Character.HumanoidRootPart.Velocity
+        local ping = Stats.Network.ServerStatsItem["Data Ping"]:GetValue() / 1000
+        local predPos = headPos + rootVel * ping * Settings.PredictionMultiplier
+
         local current = Camera.CFrame
-        local targetCF = CFrame.lookAt(current.Position, headPos)
+        local targetCF = CFrame.lookAt(current.Position, predPos)
         Camera.CFrame = current:Lerp(targetCF, Settings.Smoothness)
-
-        -- Target Info Animasyonlu açılış
-        if not TargetPanel.Visible then
-            TargetPanel.BackgroundTransparency = 1
-            TargetPanel.Visible = true
-            TweenService:Create(TargetPanel, tweenSlow, {BackgroundTransparency = 0}):Play()
-        end
-
-        TargetName.Text = target.DisplayName or target.Name
-        local dist = (target.Character.HumanoidRootPart.Position - (LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") and LocalPlayer.Character.HumanoidRootPart.Position or Vector3.new())).Magnitude
-        TargetDist.Text = "Distance: " .. math.floor(dist) .. " studs"
-    else
-        if TargetPanel.Visible then
-            TweenService:Create(TargetPanel, tweenFast, {BackgroundTransparency = 1}):Play()
-            task.delay(0.3, function() TargetPanel.Visible = false end)
-        end
-        CurrentTarget = nil
     end
 end)
 
-print("Win7 Mobile Camlock - Animasyonlu Ana GUI LOADED! ✓")
-print("Butonu sürükle | Tıkla = Lock ON/OFF")
+print("Nyxal LOADED! ✓")
+print("Lock Butonuna tıkla = Lock ON/OFF | Butonu sürükle = Yer değiştir")
